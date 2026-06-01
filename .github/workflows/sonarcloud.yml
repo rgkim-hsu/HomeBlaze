@@ -36,7 +36,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build
-        run: dotnet build src/HomeBlaze.sln --no-incremental /p:TreatWarningsAsErrors=false /p:WarningsAsErrors="" -nowarn:NU1901 --configuration Release
+        run: dotnet build src/HomeBlaze.sln --no-incremental --configuration Release
 
       - name: End SonarCloud analysis
         run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
