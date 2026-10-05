@@ -501,72 +501,11 @@ namespace HomeBlaze.Services
             {
                 if (property.StateAttribute != null)
                 {
-                    var propertyName = prefix + property.StateAttribute.GetPropertyName(
-                        rootThing, property.Property.PropertyInfo);
-
-                    var oldState = default(PropertyState);
-                    metadata?.CurrentFullState?.TryGetValue(propertyName, out oldState);
-
-                    var newValue = property.TryGetValue(obj, _logger);
-                    var newState = new PropertyState
-                    {
-                        Name = propertyName,
-                        SourceThing = rootThing,
-
-                        Value = newValue,
-                        PreviousValue = Equals(oldState.Value, newValue) ? oldState.PreviousValue : oldState.Value,
-
-                        Attribute = property.StateAttribute,
-                        Property = property.Property
-                    };
-
-                    if (property.IsThingProperty) // TODO: cache these checks?
-                    {
-                        var newThing = newValue as IThing;
-                        if (newThing != null)
-                        {
-                            childThings.Add(newThing);
-                        }
-
-                        state[propertyName] = newState;
-                    }
-                    else if (property.IsThingArrayProperty)
-                    {
-                        var newThings = newValue as IEnumerable<IThing>;
-                        if (newThings != null)
-                        {
-                            childThings.AddRange(newThings);
-                        }
-
-                        state[propertyName] = newState;
-                    }
-                    else
-                    {
-                        if (obj is ILastUpdatedProvider lastUpdatedProvider)
-                        {
-                            lastUpdated = lastUpdatedProvider.LastUpdated;
-                        }
-
-                        newState.LastUpdated = lastUpdated;
-                        newState.LastChanged = Equals(newValue, oldState.Value) ? oldState.LastChanged : lastUpdated;
-
-                        state[propertyName] = newState;
-                    }
+                    LoadAttributedPropertyState(rootThing, obj, property, property.StateAttribute, metadata, state, childThings, prefix, ref lastUpdated);
                 }
                 else if (property.ScanForStateAttribute != null)
                 {
-                    var newValue = property.TryGetValue(obj, _logger);
-                    if (newValue is IEnumerable enumerable)
-                    {
-                        foreach (var item in enumerable)
-                        {
-                            LoadState(rootThing, item, item.GetType(), state, childThings, prefix, lastUpdated);
-                        }
-                    }
-                    else
-                    {
-                        LoadState(rootThing, newValue, property.Property.PropertyType, state, childThings, prefix, lastUpdated);
-                    }
+                    LoadScannedPropertyState(rootThing, obj, property, state, childThings, prefix, lastUpdated);
                 }
             }
 
@@ -586,6 +525,87 @@ namespace HomeBlaze.Services
                         PreviousValue = Equals(oldState.Value, keyValuePair.Value) ? oldState.PreviousValue : oldState.Value,
                     };
                 }
+            }
+        }
+
+        private void LoadAttributedPropertyState(IThing rootThing, object? obj,
+            ReflectionUtilities.StatePropertyInfo property, StateAttribute stateAttribute, ThingMetadata? metadata,
+            Dictionary<string, PropertyState> state,
+            List<IThing> childThings,
+            string prefix,
+            ref DateTimeOffset? lastUpdated)
+        {
+            var propertyName = prefix + stateAttribute.GetPropertyName(
+                rootThing, property.Property.PropertyInfo);
+
+            var oldState = default(PropertyState);
+            metadata?.CurrentFullState?.TryGetValue(propertyName, out oldState);
+
+            var newValue = property.TryGetValue(obj, _logger);
+            var newState = new PropertyState
+            {
+                Name = propertyName,
+                SourceThing = rootThing,
+
+                Value = newValue,
+                PreviousValue = Equals(oldState.Value, newValue) ? oldState.PreviousValue : oldState.Value,
+
+                Attribute = stateAttribute,
+                Property = property.Property
+            };
+
+            if (property.IsThingProperty) // TODO: cache these checks?
+            {
+                var newThing = newValue as IThing;
+                if (newThing != null)
+                {
+                    childThings.Add(newThing);
+                }
+
+                state[propertyName] = newState;
+            }
+            else if (property.IsThingArrayProperty)
+            {
+                var newThings = newValue as IEnumerable<IThing>;
+                if (newThings != null)
+                {
+                    childThings.AddRange(newThings);
+                }
+
+                state[propertyName] = newState;
+            }
+            else
+            {
+                if (obj is ILastUpdatedProvider lastUpdatedProvider)
+                {
+                    lastUpdated = lastUpdatedProvider.LastUpdated;
+                }
+
+                newState.LastUpdated = lastUpdated;
+                newState.LastChanged = Equals(newValue, oldState.Value) ? oldState.LastChanged : lastUpdated;
+
+                state[propertyName] = newState;
+            }
+        }
+
+        private void LoadScannedPropertyState(IThing rootThing, object? obj,
+            ReflectionUtilities.StatePropertyInfo property,
+            Dictionary<string, PropertyState> state,
+            List<IThing> childThings,
+            string prefix,
+            DateTimeOffset? lastUpdated)
+        {
+            var newValue = property.TryGetValue(obj, _logger);
+            if (newValue is IEnumerable enumerable)
+            {
+                foreach (var item in enumerable)
+                {
+                    LoadState(rootThing, item, item.GetType(), state, childThings, prefix, lastUpdated);
+                }
+            }
+            else
+            {
+                LoadState(rootThing, newValue, property.Property.PropertyType, state, childThings, prefix, lastUpdated);
             }
         }
 
