@@ -351,143 +351,120 @@ namespace HomeBlaze.Philips.Hue
             {
                 foreach (var data in ev.Data)
                 {
-                    switch (data.Type)
+                    if (data.Type == "button")
                     {
-                        case "button":
-                            OnButtonEvent(data);
-                            break;
-                        case "light":
-                            OnLightEvent(data);
-                            break;
-                        case "grouped_light":
-                            OnGroupedLightEvent(data);
-                            break;
-                        case "motion":
-                            OnMotionEvent(data);
-                            break;
-                        case "temperature":
-                            OnTemperatureEvent(data);
-                            break;
-                        case "light_level":
-                            OnLightLevelEvent(data);
-                            break;
-                        case "device_power":
-                            OnDevicePowerEvent(data);
-                            break;
+                        var buttonDevice = Devices
+                            .OfType<HueButtonDevice>()
+                            .SingleOrDefault(d => d.ResourceId == data.Owner?.Rid);
+
+                        var button = buttonDevice?.Buttons.SingleOrDefault(b => b.ResourceId == data.Id);
+                        if (button is not null && buttonDevice is not null)
+                        {
+                            button.Update(Merge(button.ButtonResource, data), false);
+                            button.LastUpdated = DateTimeOffset.Now;
+
+                            DetectChanges(buttonDevice);
+                        }
+                    }
+                    else if (data.Type == "light")
+                    {
+                        var lightDevice = Devices
+                            .OfType<HueLightbulb>()
+                            .SingleOrDefault(d => d.ResourceId == data.Owner?.Rid);
+
+                        if (lightDevice is not null)
+                        {
+                            lightDevice.LightResource = Merge(lightDevice.LightResource, data);
+                            lightDevice.LastUpdated = DateTimeOffset.Now;
+                          
+                            DetectChanges(lightDevice);
+
+                            foreach (var room in Rooms.OfType<HueGroup>().Where(r => r.Lights.Contains(lightDevice)))
+                            {
+                                DetectChanges(room);
+                            }
+
+                            foreach (var zone in Zones.OfType<HueGroup>().Where(r => r.Lights.Contains(lightDevice)))
+                            {
+                                DetectChanges(zone);
+                            }
+                        }
+                    }
+                    else if (data.Type == "grouped_light")
+                    {
+                        var group = Rooms
+                            .Union(Zones)
+                            .OfType<HueGroup>()
+                            .SingleOrDefault(d => d.GroupedLight?.Id == data.Id);
+
+                        if (group is not null && group.GroupedLight is not null)
+                        {
+                            group.GroupedLight = Merge(group.GroupedLight, data);
+                            group.LastUpdated = DateTimeOffset.Now;
+                            DetectChanges(group);
+                        }
+                    }
+                    else if (data.Type == "motion")
+                    {
+                        var motion = Devices
+                            .OfType<HueMotionDevice>()
+                            .SingleOrDefault(d => d.MotionResource.Id == data.Id);
+
+                        if (motion is not null && motion.MotionResource is not null)
+                        {
+                            motion.MotionResource = Merge(motion.MotionResource, data);
+                            motion.LastUpdated = DateTimeOffset.Now;
+                            DetectChanges(motion);
+                        }
+                    }
+                    else if (data.Type == "temperature")
+                    {
+                        var motion = Devices
+                            .OfType<HueMotionDevice>()
+                            .SingleOrDefault(d => d.TemperatureResource?.Id == data.Id);
+
+                        if (motion is not null && motion.MotionResource is not null)
+                        {
+                            motion.TemperatureResource = Merge(motion.TemperatureResource, data);
+                            motion.LastUpdated = DateTimeOffset.Now;
+                            DetectChanges(motion);
+                        }
+                    }
+                    else if (data.Type == "light_level")
+                    {
+                        var motion = Devices
+                           .OfType<HueMotionDevice>()
+                           .SingleOrDefault(d => d.LightLevelResource?.Id == data.Id);
+
+                        if (motion is not null && motion.MotionResource is not null)
+                        {
+                            motion.LightLevelResource = Merge(motion.LightLevelResource, data);
+                            motion.LastUpdated = DateTimeOffset.Now;
+                            DetectChanges(motion);
+                        }
+                    }
+                    else if (data.Type == "device_power")
+                    {
+                        var motion = Devices
+                            .OfType<HueMotionDevice>()
+                            .SingleOrDefault(d => d.DevicePowerResource?.Id == data.Id);
+
+                        if (motion is not null && motion.MotionResource is not null)
+                        {
+                            motion.DevicePowerResource = Merge(motion.DevicePowerResource, data);
+                            motion.LastUpdated = DateTimeOffset.Now;
+                            DetectChanges(motion);
+                        }
+                    }
+                    else if (data.Type == "scene")
+                    {
+
+                    }
+                    else
+                    {
+
                     }
                 }
-            }
-        }
-
-        private void OnButtonEvent(EventStreamData data)
-        {
-            var buttonDevice = Devices
-                .OfType<HueButtonDevice>()
-                .SingleOrDefault(d => d.ResourceId == data.Owner?.Rid);
-
-            var button = buttonDevice?.Buttons.SingleOrDefault(b => b.ResourceId == data.Id);
-            if (button is not null && buttonDevice is not null)
-            {
-                button.Update(Merge(button.ButtonResource, data), false);
-                button.LastUpdated = DateTimeOffset.Now;
-
-                DetectChanges(buttonDevice);
-            }
-        }
-
-        private void OnLightEvent(EventStreamData data)
-        {
-            var lightDevice = Devices
-                .OfType<HueLightbulb>()
-                .SingleOrDefault(d => d.ResourceId == data.Owner?.Rid);
-
-            if (lightDevice is not null)
-            {
-                lightDevice.LightResource = Merge(lightDevice.LightResource, data);
-                lightDevice.LastUpdated = DateTimeOffset.Now;
-              
-                DetectChanges(lightDevice);
-
-                foreach (var room in Rooms.OfType<HueGroup>().Where(r => r.Lights.Contains(lightDevice)))
-                {
-                    DetectChanges(room);
-                }
-
-                foreach (var zone in Zones.OfType<HueGroup>().Where(r => r.Lights.Contains(lightDevice)))
-                {
-                    DetectChanges(zone);
-                }
-            }
-        }
-
-        private void OnGroupedLightEvent(EventStreamData data)
-        {
-            var group = Rooms
-                .Union(Zones)
-                .OfType<HueGroup>()
-                .SingleOrDefault(d => d.GroupedLight?.Id == data.Id);
-
-            if (group is not null && group.GroupedLight is not null)
-            {
-                group.GroupedLight = Merge(group.GroupedLight, data);
-                group.LastUpdated = DateTimeOffset.Now;
-                DetectChanges(group);
-            }
-        }
-
-        private void OnMotionEvent(EventStreamData data)
-        {
-            var motion = Devices
-                .OfType<HueMotionDevice>()
-                .SingleOrDefault(d => d.MotionResource.Id == data.Id);
-
-            if (motion is not null && motion.MotionResource is not null)
-            {
-                motion.MotionResource = Merge(motion.MotionResource, data);
-                motion.LastUpdated = DateTimeOffset.Now;
-                DetectChanges(motion);
-            }
-        }
-
-        private void OnTemperatureEvent(EventStreamData data)
-        {
-            var motion = Devices
-                .OfType<HueMotionDevice>()
-                .SingleOrDefault(d => d.TemperatureResource?.Id == data.Id);
-
-            if (motion is not null && motion.MotionResource is not null)
-            {
-                motion.TemperatureResource = Merge(motion.TemperatureResource, data);
-                motion.LastUpdated = DateTimeOffset.Now;
-                DetectChanges(motion);
-            }
-        }
-
-        private void OnLightLevelEvent(EventStreamData data)
-        {
-            var motion = Devices
-               .OfType<HueMotionDevice>()
-               .SingleOrDefault(d => d.LightLevelResource?.Id == data.Id);
-
-            if (motion is not null && motion.MotionResource is not null)
-            {
-                motion.LightLevelResource = Merge(motion.LightLevelResource, data);
-                motion.LastUpdated = DateTimeOffset.Now;
-                DetectChanges(motion);
-            }
-        }
-
-        private void OnDevicePowerEvent(EventStreamData data)
-        {
-            var motion = Devices
-                .OfType<HueMotionDevice>()
-                .SingleOrDefault(d => d.DevicePowerResource?.Id == data.Id);
-
-            if (motion is not null && motion.MotionResource is not null)
-            {
-                motion.DevicePowerResource = Merge(motion.DevicePowerResource, data);
-                motion.LastUpdated = DateTimeOffset.Now;
-                DetectChanges(motion);
             }
         }
 
