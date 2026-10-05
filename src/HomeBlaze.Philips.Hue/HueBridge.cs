@@ -175,96 +175,16 @@ namespace HomeBlaze.Philips.Hue
                     var temperatures = await _client.GetTemperaturesAsync();
                     var lightLevels = await _client.GetLightLevelsAsync();
 
+                    var resources = new HueDeviceResources(
+                        zigbeeConnectivities.Data, devicePowers.Data, lights.Data, motions.Data,
+                        buttons.Data, temperatures.Data, lightLevels.Data);
+
                     var allDevices = devices
                         .Data
                         .CreateOrUpdate(Devices,
                             (a, b) => a.Id == b.ResourceId,
-                            (a, device) =>
-                            {
-                                var services = device.Services?.Select(s => s.Rid).ToArray() ?? Array.Empty<Guid>();
-                                var zigbeeConnectivity = zigbeeConnectivities.Data.SingleOrDefault(s => services.Contains(s.Id));
-                                var devicePower = devicePowers.Data.SingleOrDefault(s => services.Contains(s.Id));
-
-                                var lightService = device.Services?.SingleOrDefault(s => s.Rtype == "light");
-                                if (lightService is not null)
-                                {
-                                    var light = lights.Data.SingleOrDefault(l => l.Id == lightService.Rid);
-                                    if (light is not null)
-                                    {
-                                        ((HueLightbulb)a).Update(device, zigbeeConnectivity, light);
-                                        return;
-                                    }
-                                }
-
-                                var motionService = device.Services?.SingleOrDefault(s => s.Rtype == "motion");
-                                if (motionService is not null)
-                                {
-                                    var motion = motions.Data.SingleOrDefault(l => l.Id == motionService.Rid);
-                                    if (motion is not null && a is HueMotionDevice motionDevice)
-                                    {
-                                        var temperature = temperatures.Data.SingleOrDefault(s => services.Contains(s.Id));
-                                        var lightLevel = lightLevels.Data.SingleOrDefault(s => services.Contains(s.Id));
-                                        ((HueMotionDevice)a).Update(device, zigbeeConnectivity, devicePower, temperature, lightLevel, motion);
-                                        return;
-                                    }
-                                }
-
-                                var buttonsService = device.Services?
-                                   .Where(s => s.Rtype == "button")
-                                   .Select(s => buttons.Data.SingleOrDefault(b => b.Id == s.Rid))
-                                   .Where(s => s is not null)
-                                   .ToArray();
-
-                                if (buttonsService is not null && buttonsService.Any())
-                                {
-                                    ((HueButtonDevice)a).Update(device, zigbeeConnectivity, devicePower, buttonsService!);
-                                    return;
-                                }
-
-                                a.Update(device, zigbeeConnectivity);
-                            },
-                            device =>
-                            {
-                                var services = device.Services?.Select(s => s.Rid).ToArray() ?? Array.Empty<Guid>();
-                                var zigbeeConnectivity = zigbeeConnectivities.Data.SingleOrDefault(s => services.Contains(s.Id));
-                                var devicePower = devicePowers.Data.SingleOrDefault(s => services.Contains(s.Id));
-
-                                var lightService = device.Services?.SingleOrDefault(s => s.Rtype == "light");
-                                if (lightService is not null)
-                                {
-                                    var light = lights.Data.SingleOrDefault(l => l.Id == lightService.Rid);
-                                    if (light is not null)
-                                    {
-                                        return new HueLightbulb(device, zigbeeConnectivity, light, this);
-                                    }
-                                }
-
-                                var motionService = device.Services?.SingleOrDefault(s => s.Rtype == "motion");
-                                if (motionService is not null)
-                                {
-                                    var motion = motions.Data.SingleOrDefault(l => l.Id == motionService.Rid);
-                                    if (motion is not null)
-                                    {
-                                        var temperature = temperatures.Data.SingleOrDefault(s => services.Contains(s.Id));
-                                        var lightLevel = lightLevels.Data.SingleOrDefault(s => services.Contains(s.Id));
-
-                                        return new HueMotionDevice(device, zigbeeConnectivity, devicePower, temperature, lightLevel, motion, this);
-                                    }
-                                }
-
-                                var buttonsService = device.Services?
-                                   .Where(s => s.Rtype == "button")
-                                   .Select(s => buttons.Data.SingleOrDefault(b => b.Id == s.Rid))
-                                   .Where(s => s is not null)
-                                   .ToArray();
-
-                                if (buttonsService is not null && buttonsService.Any())
-                                {
-                                    return new HueButtonDevice(device, zigbeeConnectivity, devicePower, buttonsService!, this);
-                                }
-
-                                return new HueDevice(device, zigbeeConnectivity, this);
-                            })
+                            (a, device) => UpdateDevice(a, device, resources),
+                            device => CreateDevice(device, resources))
                         .OrderBy(c => c.Title)
                         .ToArray();
 
@@ -343,6 +263,103 @@ namespace HomeBlaze.Philips.Hue
             {
                 _isRefreshing = false;
             }
+        }
+
+        private sealed record HueDeviceResources(
+            List<HueApi.Models.ZigbeeConnectivity> ZigbeeConnectivities,
+            List<HueApi.Models.DevicePower> DevicePowers,
+            List<HueApi.Models.Light> Lights,
+            List<HueApi.Models.Sensors.MotionResource> Motions,
+            List<HueApi.Models.ButtonResource> Buttons,
+            List<HueApi.Models.Sensors.TemperatureResource> Temperatures,
+            List<HueApi.Models.Sensors.LightLevel> LightLevels);
+
+        private static void UpdateDevice(HueDevice a, HueApi.Models.Device device, HueDeviceResources resources)
+        {
+            var services = device.Services?.Select(s => s.Rid).ToArray() ?? Array.Empty<Guid>();
+            var zigbeeConnectivity = resources.ZigbeeConnectivities.SingleOrDefault(s => services.Contains(s.Id));
+            var devicePower = resources.DevicePowers.SingleOrDefault(s => services.Contains(s.Id));
+
+            var lightService = device.Services?.SingleOrDefault(s => s.Rtype == "light");
+            if (lightService is not null)
+            {
+                var light = resources.Lights.SingleOrDefault(l => l.Id == lightService.Rid);
+                if (light is not null)
+                {
+                    ((HueLightbulb)a).Update(device, zigbeeConnectivity, light);
+                    return;
+                }
+            }
+
+            var motionService = device.Services?.SingleOrDefault(s => s.Rtype == "motion");
+            if (motionService is not null)
+            {
+                var motion = resources.Motions.SingleOrDefault(l => l.Id == motionService.Rid);
+                if (motion is not null && a is HueMotionDevice motionDevice)
+                {
+                    var temperature = resources.Temperatures.SingleOrDefault(s => services.Contains(s.Id));
+                    var lightLevel = resources.LightLevels.SingleOrDefault(s => services.Contains(s.Id));
+                    ((HueMotionDevice)a).Update(device, zigbeeConnectivity, devicePower, temperature, lightLevel, motion);
+                    return;
+                }
+            }
+
+            var buttonsService = device.Services?
+               .Where(s => s.Rtype == "button")
+               .Select(s => resources.Buttons.SingleOrDefault(b => b.Id == s.Rid))
+               .Where(s => s is not null)
+               .ToArray();
+
+            if (buttonsService is not null && buttonsService.Any())
+            {
+                ((HueButtonDevice)a).Update(device, zigbeeConnectivity, devicePower, buttonsService!);
+                return;
+            }
+
+            a.Update(device, zigbeeConnectivity);
+        }
+
+        private HueDevice CreateDevice(HueApi.Models.Device device, HueDeviceResources resources)
+        {
+            var services = device.Services?.Select(s => s.Rid).ToArray() ?? Array.Empty<Guid>();
+            var zigbeeConnectivity = resources.ZigbeeConnectivities.SingleOrDefault(s => services.Contains(s.Id));
+            var devicePower = resources.DevicePowers.SingleOrDefault(s => services.Contains(s.Id));
+
+            var lightService = device.Services?.SingleOrDefault(s => s.Rtype == "light");
+            if (lightService is not null)
+            {
+                var light = resources.Lights.SingleOrDefault(l => l.Id == lightService.Rid);
+                if (light is not null)
+                {
+                    return new HueLightbulb(device, zigbeeConnectivity, light, this);
+                }
+            }
+
+            var motionService = device.Services?.SingleOrDefault(s => s.Rtype == "motion");
+            if (motionService is not null)
+            {
+                var motion = resources.Motions.SingleOrDefault(l => l.Id == motionService.Rid);
+                if (motion is not null)
+                {
+                    var temperature = resources.Temperatures.SingleOrDefault(s => services.Contains(s.Id));
+                    var lightLevel = resources.LightLevels.SingleOrDefault(s => services.Contains(s.Id));
+
+                    return new HueMotionDevice(device, zigbeeConnectivity, devicePower, temperature, lightLevel, motion, this);
+                }
+            }
+
+            var buttonsService = device.Services?
+               .Where(s => s.Rtype == "button")
+               .Select(s => resources.Buttons.SingleOrDefault(b => b.Id == s.Rid))
+               .Where(s => s is not null)
+               .ToArray();
+
+            if (buttonsService is not null && buttonsService.Any())
+            {
+                return new HueButtonDevice(device, zigbeeConnectivity, devicePower, buttonsService!, this);
+            }
+
+            return new HueDevice(device, zigbeeConnectivity, this);
         }
 
         private void OnEventStreamMessage(string bridgeIp, List<EventStreamResponse> events)
