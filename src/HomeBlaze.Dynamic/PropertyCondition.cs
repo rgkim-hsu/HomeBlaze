@@ -64,21 +64,28 @@ namespace HomeBlaze.Dynamic
             var expression = Expression;
             if (string.IsNullOrEmpty(expression))
             {
-                expression =
-                    Operator == "==" ? "value == " + Value :
-                    Operator == "!=" ? "value != " + Value :
-
-                    Operator == "<" ? "value < " + Value :
-                    Operator == "<=" ? "value <= " + Value :
-
-                    Operator == ">" ? "value > " + Value :
-                    Operator == ">=" ? "value >= " + Value :
-
-                    "false";
+                expression = BuildComparisonExpression(Operator, Value);
             }
 
             var result = interpreter.Eval<bool>(expression);
             return result is bool boolean && boolean;
+        }
+
+        private static string BuildComparisonExpression(string? @operator, string? value)
+        {
+            return @operator switch
+            {
+                "==" => "value == " + value,
+                "!=" => "value != " + value,
+
+                "<" => "value < " + value,
+                "<=" => "value <= " + value,
+
+                ">" => "value > " + value,
+                ">=" => "value >= " + value,
+
+                _ => "false"
+            };
         }
     }
 }
